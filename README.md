@@ -2,6 +2,17 @@
 
 Build a production-ready data ingestion system that extracts event data from the DataSync Analytics API and stores it in a PostgreSQL database.
 
+## API Discoveries
+
+- **Max `limit`**: 5000 (requesting 10000 silently caps to 5000)
+- **Rate limit**: 10 req/60s (standard), 20 req/60s (bulk). `Retry-After` in seconds.
+- **Cursor TTL**: ~116s. Base64-encoded JSON `{id, ts, v:2, exp}`.
+- **Mixed timestamps**: ISO 8601 and Unix epoch ms in same response — must normalize both.
+- **Hidden endpoints**: `/internal/health`, `/internal/stats`, `POST /api/v1/events/bulk` (20/60s rate limit).
+- **No query param filtering**: `sort`, `fields`, `format` all ignored.
+- **Auth**: `X-API-Key` header. Query param auth shares same rate limit pool.
+- See [docs/discovery.md](docs/discovery.md) for full details.
+
 ## Requirements
 
 Your solution must:

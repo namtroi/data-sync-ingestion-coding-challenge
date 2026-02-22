@@ -20,6 +20,7 @@ export const config = {
   // API — must be set via env vars (no defaults)
   apiBaseUrl: requireEnv('API_BASE_URL'),
   apiKey: requireEnv('TARGET_API_KEY'),
+  streamToken: process.env.STREAM_TOKEN,
 
   // Worker
   workerConcurrency: parseInt(process.env.WORKER_CONCURRENCY ?? '5', 10),
@@ -32,12 +33,14 @@ export const config = {
     10,
   ),
 
-  // API discovery — will be updated in Phase 1
+  // API discovery — hardcoded from Phase 1 manual probing
   api: {
     endpoint: '/events',
-    limit: 1000,
-    rateLimitPerMinute: 60,
-    cursorTTLMinutes: 10,
+    maxLimit: 5000,               // tested: 10000 silently caps to 5000
+    rateLimitPerMinute: 10,       // X-RateLimit-Limit: 10, window: 60s
+    cursorTTLSeconds: 116,        // pagination.cursorExpiresIn: 116
+    retryAfterFormat: 'seconds',  // Retry-After header is integer seconds
+    rateLimitErrorCode: 'RATE_LIMIT_EXCEEDED',
   },
 } as const;
 
