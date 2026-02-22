@@ -190,27 +190,27 @@ Build the ingestion system bottom-up using TDD. Write failing tests first, then 
 
 > Sequential fetch loop: fetch → transform → write → save cursor → repeat
 
-- [ ] **TEST** `tests/integration/pipeline.test.ts`
-  - [ ] Ingests events from mock API → stores in real Postgres
-  - [ ] Saves cursor checkpoint every batch
-  - [ ] Resumes from checkpoint after simulated crash
-  - [ ] Stops when `hasMore === false`
-  - [ ] Progress callback fires with correct counts
-- [ ] **IMPLEMENT** `src/ingestion/pipeline.ts`
-- [ ] **VERIFY** all tests green
+- [x] **TEST** `tests/integration/pipeline.test.ts`
+  - [x] Ingests events from mock API → stores in real Postgres
+  - [x] Saves cursor checkpoint every batch
+  - [x] Resumes from checkpoint after simulated crash
+  - [x] Stops when `hasMore === false`
+  - [x] Progress callback fires with correct counts
+- [x] **IMPLEMENT** `src/ingestion/pipeline.ts`
+- [x] **VERIFY** all tests green
 
 ### Step 4.2: DB Integration
 
 > Real Postgres read/write cycle
 
-- [ ] **TEST** `tests/integration/db.test.ts`
-  - [ ] Migrations create all tables in real Postgres
-  - [ ] Writer inserts batch via COPY → staging → upsert flow
-  - [ ] Duplicate insert → no error, count unchanged
-  - [ ] Cursor save → cursor load roundtrip
-  - [ ] COPY performance: 10k rows inserted < 1 second
-- [ ] **IMPLEMENT** `src/db/client.ts` (pool setup with max: 10)
-- [ ] **VERIFY** all tests green
+- [x] **TEST** `tests/integration/db.test.ts`
+  - [x] Migrations create all tables in real Postgres
+  - [x] Writer inserts batch via COPY → staging → upsert flow
+  - [x] Duplicate insert → no error, count unchanged
+  - [x] Cursor save → cursor load roundtrip
+  - [x] COPY performance: 10k rows inserted < 1 second
+- [x] **IMPLEMENT** `src/db/client.ts` (pool setup with max: 10)
+- [x] **VERIFY** all tests green
 
 ---
 
