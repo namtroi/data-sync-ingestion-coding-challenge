@@ -38,43 +38,80 @@ export class Pipeline {
     this.tracker.update(state.eventsIngested);
 
     let hasMore = true;
-    const limit = 5000;
+    const limit = this.fetcher.isStreamMode ? 40000 : 5000;
+    const useOverlap = this.fetcher.isStreamMode;
 
-    // 2. Fetch loop
-    while (hasMore && !this.shouldStop) {
-      // Fetch Page
-      const page = await this.fetcher.fetchPage(limit, state.cursor);
-      
-      if (page.data.length > 0) {
-        // Transform
-        const rows = transformEvents(page.data);
-        
-        // Write
-        await this.writer.add(rows);
-        
-        // Update State
-        state.update(page.nextCursor, rows.length);
-        
-        // Save Cursor Checkpoint
-        await saveCursor(this.pool, state);
-        
-        this.tracker.update(state.eventsIngested);
+    try {
+      if (useOverlap) {
+        // Stream mode: overlap fetch + write (no rate limit)
+        let pendingFetch = this.fetcher.fetchPage(limit, state.cursor);
+
+        while (hasMore && !this.shouldStop) {
+          const page = await pendingFetch;
+          hasMore = page.hasMore;
+
+          if (hasMore && !this.shouldStop) {
+            pendingFetch = this.fetcher.fetchPage(limit, page.nextCursor);
+          }
+
+          if (page.data.length > 0) {
+            const rows = transformEvents(page.data);
+            await this.writer.add(rows);
+            state.update(page.nextCursor, rows.length);
+            this.tracker.update(state.eventsIngested);
+
+            if (state.eventsIngested % 50000 < limit) {
+              await saveCursor(this.pool, state);
+            }
+          }
+
+          if (this.onProgressCallback) {
+            this.onProgressCallback(this.tracker.getSummary(3000000));
+          }
+        }
+      } else {
+        // Standard mode: sequential with rate limit pacing
+        const delayBetweenFetches = 6500;
+
+        while (hasMore && !this.shouldStop) {
+          const fetchStart = Date.now();
+          const page = await this.fetcher.fetchPage(limit, state.cursor);
+          hasMore = page.hasMore;
+
+          if (page.data.length > 0) {
+            const rows = transformEvents(page.data);
+            await this.writer.add(rows);
+            state.update(page.nextCursor, rows.length);
+            this.tracker.update(state.eventsIngested);
+
+            if (state.eventsIngested % 50000 < limit) {
+              await saveCursor(this.pool, state);
+            }
+          }
+
+          if (this.onProgressCallback) {
+            this.onProgressCallback(this.tracker.getSummary(3000000));
+          }
+
+          if (hasMore && !this.shouldStop) {
+            const elapsed = Date.now() - fetchStart;
+            const waitTime = Math.max(0, delayBetweenFetches - elapsed);
+            if (waitTime > 0) {
+              await new Promise(r => setTimeout(r, waitTime));
+            }
+          }
+        }
       }
-      
-      hasMore = page.hasMore;
-      
-      if (this.onProgressCallback) {
-        // Total is not known dynamically, but 3M is the assignment total
-        this.onProgressCallback(this.tracker.getSummary(3000000));
-      }
+    } catch (err: any) {
+      // Save progress before exiting
+      console.warn(`Pipeline interrupted: ${err.message}`);
+      await this.writer.close();
+      await saveCursor(this.pool, state);
+      throw err;
     }
 
     // 3. Final flush
     await this.writer.close();
-    
-    // Final save in case write buffer was empty but cursor changed (rare)
-    if (!this.shouldStop) {
-        await saveCursor(this.pool, state);
-    }
+    await saveCursor(this.pool, state);
   }
 }

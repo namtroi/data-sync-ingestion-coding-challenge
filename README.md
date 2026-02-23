@@ -2,16 +2,93 @@
 
 Build a production-ready data ingestion system that extracts event data from the DataSync Analytics API and stores it in a PostgreSQL database.
 
+## How to Run
+
+```bash
+sh run-ingestion.sh
+```
+
+This builds the Docker image, starts PostgreSQL + the ingestion worker, and begins fetching all 3M events. Progress is displayed in the terminal. The process is fully automated — no manual intervention required.
+
+## Architecture Overview
+
+```
+┌──────────────────────────────────────────────────┐
+│                   Pipeline                       │
+│                                                  │
+│  ┌──────────┐   ┌─────────────┐   ┌──────────┐  │
+│  │ Fetcher   │──▶│ Transformer │──▶│ DBWriter │  │
+│  │ (axios)   │   │ (normalize) │   │ (COPY)   │  │
+│  └──────────┘   └─────────────┘   └──────────┘  │
+│       │                                │         │
+│       ▼                                ▼         │
+│  ┌──────────┐                   ┌──────────────┐ │
+│  │ Rate     │                   │ Cursor State │ │
+│  │ Handling │                   │ (checkpoint) │ │
+│  └──────────┘                   └──────────────┘ │
+└──────────────────────────────────────────────────┘
+```
+
+**Tech Stack:** Node.js 20, TypeScript, Axios, pg (node-postgres), Pino logger, Vitest, Docker
+
+### Components
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| **Fetcher** | `src/api/fetcher.ts` | Paginated API calls, 429 retry with `Retry-After`, cursor expiry handling |
+| **Transformer** | `src/ingestion/transformer.ts` | Normalize mixed timestamps (ISO 8601 + Unix epoch ms), map to DB schema |
+| **DBWriter** | `src/db/writer.ts` | Batch upsert via staging table: `UNNEST → INSERT ON CONFLICT DO NOTHING` |
+| **Cursor** | `src/ingestion/cursor.ts` | Save/load pagination cursor to PostgreSQL for crash recovery |
+| **Pipeline** | `src/ingestion/pipeline.ts` | Orchestrates fetch → transform → write loop with progress tracking |
+
+### Data Flow
+
+1. **Fetch** — GET `/api/v1/events?limit=5000&cursor=<token>` with `X-API-Key` header
+2. **Transform** — Normalize timestamps, extract fields, serialize `properties`/`session` as JSONB
+3. **Write** — Batch insert via staging table with `ON CONFLICT (id) DO NOTHING` for idempotency
+4. **Checkpoint** — Save cursor + event count to `cursor_state` table
+5. **Resume** — On restart, load cursor and continue from last checkpoint
+
+### Resumability
+
+- Cursor saved to PostgreSQL after each batch
+- `ON CONFLICT DO NOTHING` ensures no duplicates on re-processing
+- If cursor expires between restarts, falls back to re-scanning from start (dedup handles overlap)
+
 ## API Discoveries
 
-- **Max `limit`**: 5000 (requesting 10000 silently caps to 5000)
-- **Rate limit**: 10 req/60s (standard), 20 req/60s (bulk). `Retry-After` in seconds.
-- **Cursor TTL**: ~116s. Base64-encoded JSON `{id, ts, v:2, exp}`.
-- **Mixed timestamps**: ISO 8601 and Unix epoch ms in same response — must normalize both.
-- **Hidden endpoints**: `/internal/health`, `/internal/stats`, `POST /api/v1/events/bulk` (20/60s rate limit).
-- **No query param filtering**: `sort`, `fields`, `format` all ignored.
-- **Auth**: `X-API-Key` header. Query param auth shares same rate limit pool.
-- See [docs/discovery.md](docs/discovery.md) for full details.
+| Discovery | Detail |
+|-----------|--------|
+| **Max limit** | 5,000 (requesting higher silently caps) |
+| **Rate limit** | 10 req/60s (standard), 20 req/60s (bulk). `Retry-After` header in seconds |
+| **Cursor structure** | Base64 JSON: `{id, ts, v:2, exp}`. TTL ~116s |
+| **Cursor expiry** | Returns `400 CURSOR_EXPIRED` — must handle gracefully |
+| **Mixed timestamps** | ISO 8601 strings AND Unix epoch ms in the **same response** |
+| **Hidden endpoints** | `/internal/health` (no limit), `/internal/stats` (3M events, 3K users, 60K sessions) |
+| **Bulk endpoint** | `POST /api/v1/events/bulk` — 20 req/60s rate limit |
+| **Stream endpoint** | `/api/v1/events/d4ta/x7k9/feed` — requires `X-Stream-Token`, **no rate limit** |
+| **Stream token** | Obtained from `/internal/dashboard/stream-access` (POST, browser-only). TTL: 300s |
+| **Auth** | `X-API-Key` header. Query param auth (`?apiKey=`) shares same rate limit pool |
+| **Caching** | `X-Cache` headers present, 30s TTL. Redis-backed per `/internal/stats` |
+| **No filtering** | `sort`, `fields`, `format` params all silently ignored |
+
+See [docs/discovery.md](docs/discovery.md) for full detailed findings.
+
+## What I Would Improve With More Time
+
+1. **Auto-refresh stream tokens** — Use Puppeteer to obtain stream tokens from the dashboard automatically, enabling sustained high-throughput ingestion without manual refresh every 5 minutes.
+
+2. **Forged cursor recovery** — Decode the saved cursor's `ts` field and forge a new cursor with a future `exp` to resume mid-dataset instead of re-scanning from the start when a cursor expires.
+
+3. **Integration tests with API mocking** — Use `nock` or `msw` to simulate rate limits, cursor expiry, and network failures in CI.
+
+## AI Tools
+
+I chose [Antigravity](https://antigravity.dev) for this challenge as it's ideal for small-to-medium scale projects. My process:
+
+* **Document-Driven Development** — Evaluated three core solutions and selected a design capable of processing 3M events/hour.
+* **Research & Discovery** — Refined the implementation based on insights from the dashboard and API.
+* **Test-Driven Development** — Implemented TDD as AI guardrails to ensure high-quality delivery.
 
 ## Requirements
 

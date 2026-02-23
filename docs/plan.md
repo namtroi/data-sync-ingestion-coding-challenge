@@ -218,50 +218,51 @@ Build the ingestion system bottom-up using TDD. Write failing tests first, then 
 
 ### Step 5.1: Main Entrypoint
 
-- [ ] **IMPLEMENT** `src/index.ts`
-  - [ ] Register `SIGTERM`/`SIGINT` handlers (graceful shutdown)
-  - [ ] Load config (including `STREAM_TOKEN` env var)
-  - [ ] Init DB pool
-  - [ ] Run migrations
-  - [ ] Load cursor state (resume or fresh start)
-  - [ ] Start pipeline loop
-  - [ ] Log final stats on completion
-  - [ ] Print `"ingestion complete"` (required by `run-ingestion.sh`)
+- [x] **IMPLEMENT** `src/index.ts`
+  - [x] Register `SIGTERM`/`SIGINT` handlers (graceful shutdown)
+  - [x] Load config (including `STREAM_TOKEN` env var)
+  - [x] Init DB pool
+  - [x] Run migrations
+  - [x] Load cursor state (resume or fresh start)
+  - [x] Start pipeline loop
+  - [x] Log final stats on completion
+  - [x] Print `"ingestion complete"` (required by `run-ingestion.sh`)
 
 ### Step 5.2: Dockerfile
 
-- [ ] **CREATE** `packages/ingestion/Dockerfile`
-  - [ ] Multi-stage build (builder + runtime)
-  - [ ] `node:20-alpine` base
-  - [ ] `npm ci` → `npm run build` → copy `dist/` + `node_modules/`
+- [x] **CREATE** `packages/ingestion/Dockerfile`
+  - [x] Multi-stage build (builder + runtime)
+  - [x] `node:20-alpine` base
+  - [x] `npm ci` → `npm run build` → copy `dist/` + `node_modules/`
 
 ### Step 5.3: Docker Compose
 
-- [ ] **UPDATE** `docker-compose.yml`
-  - [ ] Add `ingestion` service
-  - [ ] Container name: `assignment-ingestion`
-  - [ ] Set env: `DATABASE_URL`, `API_BASE_URL`, `TARGET_API_KEY`, `STREAM_TOKEN`
-  - [ ] `depends_on: postgres` with `service_healthy` condition
+- [x] **UPDATE** `docker-compose.yml`
+  - [x] Add `ingestion` service
+  - [x] Container name: `assignment-ingestion`
+  - [x] Set env: `DATABASE_URL`, `API_BASE_URL`, `TARGET_API_KEY`, `STREAM_TOKEN`
+  - [x] `depends_on: postgres` with `service_healthy` condition
 
 ### Step 5.4: End-to-End Verification
 
-- [ ] `docker compose down -v` → clean slate
-- [ ] `sh run-ingestion.sh` → completes without manual intervention
-- [ ] Postgres has events in `ingested_events` table
-- [ ] Logs show progress tracking (events/sec, ETA)
-- [ ] Simulate crash (kill container) → restart → resumes from checkpoint
-- [ ] No duplicate events after resume
+- [x] `docker compose down -v` → clean slate
+- [x] `sh run-ingestion.sh` → completes without manual intervention
+- [x] Postgres has events in `ingested_events` table
+- [x] Logs show progress tracking (events/sec, ETA)
+- [x] Simulate crash (kill container) → restart → resumes from checkpoint
+- [x] No duplicate events after resume
 
 ---
 
 ## Phase 6: Submission
 
-- [ ] Export all event IDs: `SELECT id FROM ingested_events` → `event_ids.txt`
-- [ ] POST to `/api/v1/submissions` with event IDs + GitHub repo URL
-- [ ] Verify submission response shows 3,000,000 events
-- [ ] Push final code to GitHub
-- [ ] Update `README.md` with:
-  - [ ] How to run (`sh run-ingestion.sh`)
-  - [ ] Architecture overview
-  - [ ] API discoveries
-  - [ ] What you would improve with more time
+- [x] Export all event IDs: `SELECT id FROM ingested_events` → `event_ids.txt`
+- [x] POST to `/api/v1/submissions` with event IDs + GitHub repo URL
+- [x] Verify submission response shows 3,000,000 events
+- [x] Push final code to GitHub
+- [x] Update `README.md` with:
+  - [x] How to run (`sh run-ingestion.sh`)
+  - [x] Architecture overview
+  - [x] API discoveries
+  - [x] What you would improve with more time
+  - [x] Workflow

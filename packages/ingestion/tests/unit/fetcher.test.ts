@@ -101,10 +101,20 @@ describe('Fetcher', () => {
   });
 
   it('fetchPage() — API returns 401/403 -> throws auth error (no retry)', async () => {
+    const fallbackFetcher = new Fetcher(mockClient as unknown as AxiosInstance, false);
     const error403 = Object.assign(new Error(), { isAxiosError: true, response: { status: 403 } });
     mockClient.get.mockRejectedValueOnce(error403);
     
-    await expect(fetcher.fetchPage(5000)).rejects.toThrow(/auth/i);
+    await expect(fallbackFetcher.fetchPage(5000)).rejects.toThrow(/auth/i);
     expect(mockClient.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetchPage() — stream endpoint returns 403 -> throws STREAM_TOKEN_EXPIRED', async () => {
+    const error403 = Object.assign(new Error(), { isAxiosError: true, response: { status: 403 } });
+    mockClient.get.mockRejectedValueOnce(error403);
+    
+    await expect(fetcher.fetchPage(5000)).rejects.toThrow('STREAM_TOKEN_EXPIRED');
+    expect(mockClient.get).toHaveBeenCalledTimes(1);
+    expect(mockClient.get).toHaveBeenCalledWith('/events/d4ta/x7k9/feed', expect.any(Object));
   });
 });
